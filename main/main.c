@@ -11,6 +11,10 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/queue.h"
+
+#include "nvs_flash.h"
+
+
 #include "driver/gpio.h"
 #include "driver/i2c_master.h"
 #include "MCP4725.h"
@@ -27,28 +31,33 @@
 
 #define TAG "GPIO"
 
+
+//--------------
+
 void app_main(void)
 {
+
+    // Initialize NVS
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES ||
+        ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+
+
+
     ESP_LOGI(TAG, "Init config GPIO...");
-    gpio_config_t io_conf = {};
-    io_conf.intr_type = GPIO_INTR_DISABLE;
-    io_conf.mode = GPIO_MODE_OUTPUT;
-    io_conf.pin_bit_mask = GPIO_OUTPUT_PIN_SEL;
-    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
-    io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+    gpio_config_t io_conf = {
+        .intr_type = GPIO_INTR_DISABLE,
+        .mode = GPIO_MODE_OUTPUT,
+        .pin_bit_mask = GPIO_OUTPUT_PIN_SEL,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+    };
     gpio_config(&io_conf);
 
-
-    // i2c_master_bus_config_t i2c_bus_config = {
-    //     .i2c_port = I2C_MASTER_NUM,
-    //     .sda_io_num = I2C_MASTER_SDA_IO,
-    //     .scl_io_num = I2C_MASTER_SCL_IO,
-    //     .clk_source = I2C_CLK_SRC_DEFAULT,
-    //     .glitch_ignore_cnt = 7,
-    //     .flags.enable_internal_pullup = false, // Tu PCB ya tiene R7/R10 
-    // };
-
-    i2c_master_bus_handle_t i2c_bus_handle = NULL;
 
 
 
