@@ -1,20 +1,10 @@
 {
-  "C_Cpp.intelliSenseEngine": "default",
-  "idf.espIdfPath": "/home/elvis/esp/v5.5.1/esp-idf",
-  "idf.pythonInstallPath": "/usr/bin/python",
-  "idf.openOcdConfigs": [
-    "board/esp32-wrover-kit-3.3v.cfg"
-  ],
-  "idf.port": "/dev/ttyUSB0",
-  "idf.toolsPath": "/home/elvis/.espressif",
-  "idf.customExtraVars": {
-    "IDF_TARGET": "esp32c3"
-  },
-  "clangd.path": "/home/elvis/.espressif/tools/esp-clang/esp-19.1.2_20250312/esp-clang/bin/clangd",
-  "clangd.arguments": [
-    "--background-index",
-    "--query-driver=**",
-    "--compile-commands-dir=/home/elvis/project-name/build"
-  ],
-  "idf.flashType": "UART"
+    "idf.currentSetup": "/home/elv/esp/v5.5.1/esp-idf",
+    "idf.openOcdConfigs": [
+        "board/esp32c3-ftdi.cfg"
+    ],
+    "idf.customExtraVars": {
+        "OPENOCD_SCRIPTS": "/home/elvis/esp/.espressif/tools/openocd-esp32/v0.10.0-esp32-20190708/openocd-esp32/share/openocd/scripts",
+        "IDF_TARGET": "esp32c3"
+    }
 }
