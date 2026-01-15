@@ -6,5 +6,7 @@
     "idf.customExtraVars": {
         "OPENOCD_SCRIPTS": "/home/elvis/esp/.espressif/tools/openocd-esp32/v0.10.0-esp32-20190708/openocd-esp32/share/openocd/scripts",
         "IDF_TARGET": "esp32c3"
-    }
+    },
+    "idf.port": "/dev/ttyUSB0",
+    "idf.flashType": "UART"
 }

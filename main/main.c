@@ -16,13 +16,22 @@
 #include "driver/gpio.h"
 #include "esp_err.h"
 #include "esp_log.h"
-#include <mcp4725.h>
+#include "mcp4725.h"
+#include "button.h"
+
 
 
 
 #define GPIO_OUT_RELE       GPIO_NUM_4
 #define GPIO_OUT_LED        GPIO_NUM_3
 #define GPIO_OUTPUT_PIN_SEL  ((1ULL<<GPIO_OUT_RELE) | (1ULL<<GPIO_OUT_LED))
+
+
+#define GPIO_IN_BTN_AVL     GPIO_NUM_5
+#define GPIO_IN_BTN_CFG     GPIO_NUM_10
+#define GPIO_INPUT_PIN_SEL  (1ULL<<GPIO_IN_BTN_AVL | 1ULL<<GPIO_IN_BTN_CFG)
+
+
 
 
 // Configuración de pines según tu esquemático
@@ -42,58 +51,24 @@
 
 #define TAG "GPIO"
 
-#define VDD 5.0f  // Voltaje de referencia del DAC
+#define VDD_MAX     5.0f  // Voltaje de referencia del DAC
+#define VECU_HIGH   1.25f
+#define VECU_LOW    0.50f
 
 
-
-akek
 static i2c_dev_t dev_u1;
 static i2c_dev_t dev_u2;
 static bool dac_ready = false;
 
+static button_t btn_avl, btn_cfg;
 
-
-static float clamp_voltage(float v)
-{
+//------------------------------------------------------------//
+static float clamp_voltage(float v){
     if (v < 0.0f) return 0.0f;
-    if (v > VDD) return VDD;
+    if (v > VDD_MAX) return VDD_MAX;
     return v;
 }
-
-static esp_err_t nvs_load_float(const char *key, float *out, float default_value)
-{
-    nvs_handle_t handle;
-    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
-    if (err != ESP_OK)
-        return err;
-
-    size_t size = sizeof(float);
-    err = nvs_get_blob(handle, key, out, &size);
-    if (err == ESP_ERR_NVS_NOT_FOUND || size != sizeof(float)) {
-        *out = default_value;
-        err = nvs_set_blob(handle, key, out, sizeof(float));
-        if (err == ESP_OK)
-            err = nvs_commit(handle);
-    }
-
-    nvs_close(handle);
-    return err;
-}
-
-static esp_err_t nvs_save_float(const char *key, float value)
-{
-    nvs_handle_t handle;
-    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
-    if (err != ESP_OK)
-        return err;
-
-    err = nvs_set_blob(handle, key, &value, sizeof(value));
-    if (err == ESP_OK)
-        err = nvs_commit(handle);
-
-    nvs_close(handle);
-    return err;
-}
+//------------------------------------------------------------//
 
 static void init_dac(i2c_dev_t *dev, uint8_t addr)
 {
@@ -116,17 +91,10 @@ static void apply_dac_values(float v_u1, float v_u2, bool save_nvs)
     float u1 = clamp_voltage(v_u1);
     float u2 = clamp_voltage(v_u2);
 
-    ESP_ERROR_CHECK(mcp4725_set_voltage(&dev_u1, VDD, u1, false));
-    ESP_ERROR_CHECK(mcp4725_set_voltage(&dev_u2, VDD, u2, false));
+    ESP_ERROR_CHECK(mcp4725_set_voltage(&dev_u1, VDD_MAX, u1, false));
+    ESP_ERROR_CHECK(mcp4725_set_voltage(&dev_u2, VDD_MAX, u2, false));
 
-    if (save_nvs) {
-        esp_err_t err = nvs_save_float(NVS_KEY_U1_V, u1);
-        if (err != ESP_OK)
-            ESP_LOGE(TAG, "NVS save U1 failed: %s", esp_err_to_name(err));
-        err = nvs_save_float(NVS_KEY_U2_V, u2);
-        if (err != ESP_OK)
-            ESP_LOGE(TAG, "NVS save U2 failed: %s", esp_err_to_name(err));
-    }
+
 }
 
 void app_set_dac_voltage(float u1, float u2)
@@ -138,30 +106,85 @@ void app_set_dac_voltage(float u1, float u2)
 
     apply_dac_values(u1, u2, true);
 }
+//------------------------------------------------------------//
+
+void on_sensor_callback(button_t *btn, button_state_t state) {
+
+    ESP_LOGW("SEN", "BTN[%02d] -> %02d ", btn->gpio, state);
 
 
-void task(void *pvParameters)
+    if(btn->gpio == GPIO_IN_BTN_AVL) {
+        ESP_LOGI("SEN", "BTN AVL");
+        if(state == BUTTON_PRESSED) {
+            ESP_LOGW("SEN", "BTN AVL PRESSED - RELE ON");
+            ESP_LOGI("SEN", "V01:%.02f, V02:%.02f", VECU_LOW, VECU_HIGH);
+            gpio_set_level(GPIO_OUT_RELE, 1);
+        } else if(state == BUTTON_RELEASED) {
+            ESP_LOGW("SEN", "BTN AVL RELEASED - RELE OFF");
+            gpio_set_level(GPIO_OUT_RELE, 0);
+        }
+    }
+
+    if(btn->gpio == GPIO_IN_BTN_CFG) {
+        ESP_LOGI("SEN", "BTN CFG");
+        if(state == BUTTON_PRESSED_LONG) {
+            ESP_LOGE("SEN", "BTN CFG LONG PRESS - TOGGLE LED");
+        }
+    }
+}
+
+
+//------------------------------------------------------------//
+void init_inputs_and_outputs() {
+
+    ESP_LOGI(TAG, "Init config GPIO...");
+    gpio_config_t io_conf = {
+        .intr_type = GPIO_INTR_DISABLE,
+        .mode = GPIO_MODE_OUTPUT,
+        .pin_bit_mask = GPIO_OUTPUT_PIN_SEL,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .pull_up_en = GPIO_PULLUP_DISABLE,
+    };
+    gpio_config(&io_conf);
+
+    gpio_set_level(GPIO_OUT_RELE, 0);
+    gpio_set_level(GPIO_OUT_LED, 0);
+
+    ESP_LOGI(TAG, "Init config BUTTON...");
+    btn_avl.gpio = GPIO_IN_BTN_AVL;
+    btn_avl.pressed_level = 0;
+    btn_avl.internal_pull = true;
+    btn_avl.autorepeat = false;
+    btn_avl.callback = on_sensor_callback;
+
+    btn_cfg.gpio = GPIO_IN_BTN_CFG;
+    btn_cfg.pressed_level = 0;
+    btn_cfg.internal_pull = true;
+    btn_cfg.autorepeat = false;
+    btn_cfg.callback = on_sensor_callback;
+
+
+    button_init(&btn_avl);
+    button_init(&btn_cfg);
+
+}
+
+// Tarea principal
+void task_mcpu_demo(void *pvParameters)
 {
     (void)pvParameters;
 
     init_dac(&dev_u1, MCP4725_U1_ADDR);
     init_dac(&dev_u2, MCP4725_U2_ADDR);
 
-    float v_u1 = 0.0f;
-    float v_u2 = 0.0f;
-    esp_err_t err = nvs_load_float(NVS_KEY_U1_V, &v_u1, 0.0f);
-    if (err != ESP_OK)
-        ESP_LOGE(TAG, "NVS load U1 failed: %s", esp_err_to_name(err));
-    err = nvs_load_float(NVS_KEY_U2_V, &v_u2, 0.0f);
-    if (err != ESP_OK)
-        ESP_LOGE(TAG, "NVS load U2 failed: %s", esp_err_to_name(err));
-
-    apply_dac_values(v_u1, v_u2, false);
+    apply_dac_values(VECU_LOW, VECU_HIGH, false);
     dac_ready = true;
-    printf("DAC init: U1=%.02f V, U2=%.02f V\n", v_u1, v_u2);
+    ESP_LOGE(TAG, "DAC init: U1=%.02f V, U2=%.02f V", VECU_LOW, VECU_HIGH);
 
-    while (1)
+    while (1){
         vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+
 }
 
 void app_main(void)
@@ -175,23 +198,12 @@ void app_main(void)
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
+    init_inputs_and_outputs();
 
-
-
-    ESP_LOGI(TAG, "Init config GPIO...");
-    gpio_config_t io_conf = {
-        .intr_type = GPIO_INTR_DISABLE,
-        .mode = GPIO_MODE_OUTPUT,
-        .pin_bit_mask = GPIO_OUTPUT_PIN_SEL,
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,
-        .pull_up_en = GPIO_PULLUP_DISABLE,
-    };
-    gpio_config(&io_conf);
 
 
     // Init i2cdev library
     ESP_ERROR_CHECK(i2cdev_init());
-
-    xTaskCreate(task, "test", configMINIMAL_STACK_SIZE * 8, NULL, 5, NULL);
+    xTaskCreate(task_mcpu_demo, "demo-task", configMINIMAL_STACK_SIZE * 8, NULL, 5, NULL);
     
 }
