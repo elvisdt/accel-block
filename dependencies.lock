@@ -20,7 +20,7 @@ dependencies:
   esp-idf-lib/i2cdev:
     dependencies: []
     source:
-      path: /home/elvis/elvis/ESP_IDF/accel_blok/components/esp-idf-lib__i2cdev
+      path: /home/elv/malek/esp-idf/accel-block/components/esp-idf-lib__i2cdev
       type: local
     version: 2.1.0
   idf:
@@ -30,6 +30,6 @@ dependencies:
 direct_dependencies:
 - esp-idf-lib/esp_idf_lib_helpers
 - esp-idf-lib/i2cdev
-manifest_hash: 427e711725ac3db7e38ea95974fe0849402b960b0ad529bdbb575d8d5a3c228a
+manifest_hash: 49b3f8125adb474bb11a5ad2a52124e88a25f2bebdbbbff224e503d0a5c4709f
 target: esp32c3
 version: 2.0.0

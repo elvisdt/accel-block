@@ -14,7 +14,6 @@ maintainers:
 repository: git://github.com/esp-idf-lib/i2cdev.git
 repository_info:
   commit_sha: b4f09df5a02e576af61846954557bf7a61d35274
-  path: .
 targets:
 - esp32
 - esp32c2

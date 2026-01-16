@@ -20,6 +20,11 @@
 #include "button.h"
 
 
+#include "esp_ota_ops.h"
+#include "gap.h"
+#include "gatt_svr.h"
+
+
 
 
 #define GPIO_OUT_RELE       GPIO_NUM_4
@@ -59,6 +64,8 @@
 static i2c_dev_t dev_u1;
 static i2c_dev_t dev_u2;
 static bool dac_ready = false;
+static float g_dac_u1 = 0.0f;
+static float g_dac_u2 = 0.0f;
 
 static button_t btn_avl, btn_cfg;
 
@@ -93,6 +100,8 @@ static void apply_dac_values(float v_u1, float v_u2, bool save_nvs)
 
     ESP_ERROR_CHECK(mcp4725_set_voltage(&dev_u1, VDD_MAX, u1, false));
     ESP_ERROR_CHECK(mcp4725_set_voltage(&dev_u2, VDD_MAX, u2, false));
+    g_dac_u1 = u1;
+    g_dac_u2 = u2;
 
 
 }
@@ -105,6 +114,16 @@ void app_set_dac_voltage(float u1, float u2)
     }
 
     apply_dac_values(u1, u2, true);
+}
+
+void app_get_dac_voltage(float *u1, float *u2)
+{
+    if (u1 != NULL) {
+        *u1 = g_dac_u1;
+    }
+    if (u2 != NULL) {
+        *u2 = g_dac_u2;
+    }
 }
 //------------------------------------------------------------//
 
@@ -206,4 +225,18 @@ void app_main(void)
     ESP_ERROR_CHECK(i2cdev_init());
     xTaskCreate(task_mcpu_demo, "demo-task", configMINIMAL_STACK_SIZE * 8, NULL, 5, NULL);
     
+
+    // initialize NimBLE stack (controller and HCI handled inside nimble_port_init)
+    ESP_ERROR_CHECK(nimble_port_init());
+
+    // register sync and reset callbacks
+    ble_hs_cfg.sync_cb = sync_cb;
+    ble_hs_cfg.reset_cb = reset_cb;
+
+    // initialize service table
+    gatt_svr_init();
+
+    // set device name and start host task
+    ble_svc_gap_device_name_set(device_name);
+    nimble_port_freertos_init(host_task);
 }
